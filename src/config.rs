@@ -14,6 +14,8 @@ pub struct Basic {
     pub db_path: PathBuf,
     #[serde(default = "media_ext_default")]
     pub media_ext: HashSet<String>,
+    #[serde(default = "ignore")]
+    pub ignore: HashSet<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,4 +29,8 @@ fn media_ext_default() -> HashSet<String> {
         .into_iter()
         .map(|s| s.to_string())
         .collect()
+}
+
+fn ignore() -> HashSet<String> {
+    ["@eaDir"].into_iter().map(|s| s.to_string()).collect()
 }

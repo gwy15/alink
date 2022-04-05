@@ -47,6 +47,12 @@ async fn run_on_dir(path: PathBuf, ctx: Ctx) -> Result<()> {
         let entry_path = entry.path();
 
         let name = entry.file_name();
+        if let Some(s) = name.to_str() {
+            if ctx.basic.ignore.contains(s) {
+                continue;
+            }
+        }
+
         let relative = ctx.relative.join(name);
         let mut ctx = ctx.clone();
         ctx.relative = relative;
@@ -138,8 +144,10 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
 }
 
 fn is_media(file: &Path, media_ext: &HashSet<String>) -> Result<bool> {
-    let ext = file.extension().context("no extension")?;
-    let ext = ext.to_str().context("extension is not a valid utf8")?;
+    let ext = match file.extension() {
+        Some(ext) => ext.to_str().context("extension is not a valid utf8")?,
+        None => return Ok(false),
+    };
     Ok(media_ext.contains(ext))
 }
 
