@@ -156,10 +156,8 @@ fn search_target(
                 if let Some(target) = search_target(entry_path, inode).await? {
                     return Ok(Some(target));
                 }
-            } else {
-                if entry_path.metadata()?.ino() == inode {
-                    return Ok(Some(entry_path));
-                }
+            } else if entry_path.metadata()?.ino() == inode {
+                return Ok(Some(entry_path));
             }
         }
         Ok(None)
