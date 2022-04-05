@@ -73,7 +73,19 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
         single_file
     );
 
-    // 1. 判断理想情况是否已经存在，如果存在直接返回不进行任何操作
+    // 1. 检查 DB 里面是否有缓存，避免重复搜索
+    if let Some(link_record) = db::Link::from_src(&file, &ctx.pool).await? {
+        let linked_path = PathBuf::from(link_record.target);
+        if linked_path.exists() {
+            info!("DB 缓存存在而且验证成功，跳过: {}", linked_path.display());
+            return Ok(());
+        } else {
+            warn!("DB 缓存存在，但是目标不存在，删除 DB 缓存");
+            db::Link::delete(link_record.id, &ctx.pool).await?;
+        }
+    }
+
+    // 2. 判断理想情况是否已经存在，如果存在直接返回不进行任何操作
     let ideal_target = if single_file {
         let stem = file.file_stem().context("file stem error")?;
         ctx.target.join(stem).join(ctx.relative.as_os_str())
@@ -88,18 +100,6 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
         info!("目标已存在，跳过: {}", ideal_target.display());
         db::Link::link(&file, &ideal_target, &ctx.pool).await?;
         return Ok(());
-    }
-
-    // 2. 如果理想情况不存在，检查 DB 里面是否有缓存，避免重复搜索
-    if let Some(link_record) = db::Link::from_src(&file, &ctx.pool).await? {
-        let linked_path = PathBuf::from(link_record.target);
-        if linked_path.exists() {
-            info!("DB 缓存存在，跳过: {}", linked_path.display());
-            return Ok(());
-        } else {
-            warn!("DB 缓存存在，但是目标不存在，删除 DB 缓存");
-            db::Link::delete(link_record.id, &ctx.pool).await?;
-        }
     }
 
     // 3. 如果缓存也不存在，根据 inode 搜索目录
