@@ -12,6 +12,9 @@ use std::{
 };
 use tokio::fs;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
 #[derive(Debug, Clone)]
 pub struct Ctx {
     pub pool: Pool,

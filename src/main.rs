@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate log;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::{env, path::PathBuf, sync::Arc};
 
@@ -27,7 +27,9 @@ async fn main() -> Result<()> {
 
     let opts = Opts::parse();
 
-    let config_s = tokio::fs::read_to_string(&opts.config).await?;
+    let config_s = tokio::fs::read_to_string(&opts.config)
+        .await
+        .with_context(|| format!("配置文件 {} 打开失败", opts.config.display()))?;
     let config: alink::Config = toml::from_str(&config_s)?;
 
     let db_uri = format!("sqlite://{}", &config.basic.db_path.display());

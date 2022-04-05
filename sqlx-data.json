@@ -1,0 +1,53 @@
+{
+  "db": "SQLite",
+  "abd4d405a461187311684ccdff2f342b85dc3cad03c3c7905323f2c67f531fff": {
+    "query": "\n            INSERT INTO `links`\n                (`src`, `target`)\n            VALUES\n                (?, ?);\n            ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 2
+      },
+      "nullable": []
+    }
+  },
+  "c269834c8ca2042c40ff8cb751521569ce26621dc56acada4c94d244f740a054": {
+    "query": "\n            DELETE FROM\n                `links`\n            WHERE\n                `id` = ?;\n            ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "f223f506a220951d7c73dac13d483c84de1ad11a4c23fbb4357835144f8b168a": {
+    "query": "\n            SELECT\n                `id`, `src`, `target`\n            FROM\n                `links`\n            WHERE\n                `src` = ?\n            LIMIT 1;\n            ",
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "src",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "target",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": [
+        false,
+        false,
+        false
+      ]
+    }
+  }
+}
