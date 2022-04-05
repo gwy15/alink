@@ -20,6 +20,8 @@ pub struct Ctx {
     pub target: Arc<PathBuf>,
     /// 相对于 src 的路径
     pub relative: PathBuf,
+
+    pub dry_run: bool,
 }
 
 pub fn run_on(path: PathBuf, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<()>>>> {
@@ -106,9 +108,12 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
 
     // 4. 真的没有链接，硬链接到理想目标
     let target_parent = ideal_target.parent().context("cannot get target parent")?;
-    fs::create_dir_all(target_parent).await?;
-    hard_link(&file, &ideal_target).await?;
-    db::Link::link(&file, &ideal_target, &ctx.pool).await?;
+    info!("link {} => {}", file.display(), ideal_target.display());
+    if !ctx.dry_run {
+        fs::create_dir_all(target_parent).await?;
+        fs::hard_link(&file, &ideal_target).await?;
+        db::Link::link(&file, &ideal_target, &ctx.pool).await?;
+    }
 
     // 处理其他文件（ass、nfo 啥的）直接拷贝
     for ext in ["ass", "nfo", "jpg", "png", "srt"] {
@@ -120,7 +125,9 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
                 attachment.display(),
                 attachment_target.display()
             );
-            fs::copy(attachment, attachment_target).await?;
+            if !ctx.dry_run {
+                fs::copy(attachment, attachment_target).await?;
+            }
         }
     }
 
@@ -131,13 +138,6 @@ fn is_media(file: &Path, media_ext: &HashSet<String>) -> Result<bool> {
     let ext = file.extension().context("no extension")?;
     let ext = ext.to_str().context("extension is not a valid utf8")?;
     Ok(media_ext.contains(ext))
-}
-
-async fn hard_link(file: &Path, target: &Path) -> Result<()> {
-    info!("link {} => {}", file.display(), target.display());
-    fs::hard_link(file, target).await?;
-
-    Ok(())
 }
 
 #[cfg(unix)]

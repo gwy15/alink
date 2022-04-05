@@ -1,7 +1,22 @@
 #[macro_use]
 extern crate log;
 use anyhow::Result;
+use clap::Parser;
 use std::{env, path::PathBuf, sync::Arc};
+
+#[derive(Debug, Parser)]
+pub struct Opts {
+    #[clap(long = "dry-run", short = 'd', help = "不实际进行 link")]
+    dry_run: bool,
+
+    #[clap(
+        long = "config",
+        short = 'c',
+        help = "Config file path",
+        default_value = "config.toml"
+    )]
+    config: PathBuf,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -10,7 +25,9 @@ async fn main() -> Result<()> {
     }
     pretty_env_logger::try_init_timed()?;
 
-    let config_s = tokio::fs::read_to_string("config.toml").await?;
+    let opts = Opts::parse();
+
+    let config_s = tokio::fs::read_to_string(&opts.config).await?;
     let config: alink::Config = toml::from_str(&config_s)?;
 
     let db_uri = format!("sqlite://{}", &config.basic.db_path.display());
@@ -29,6 +46,7 @@ async fn main() -> Result<()> {
             src: Arc::new(src.clone()),
             target: Arc::new(target),
             relative: PathBuf::new(),
+            dry_run: opts.dry_run,
         };
 
         alink::run_on(src, ctx).await?;
