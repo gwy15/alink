@@ -2,6 +2,9 @@ on: [push, pull_request]
 
 name: Continuous integration
 
+env:
+  SQLX_OFFLINE: 1
+
 jobs:
   check:
     name: Check
