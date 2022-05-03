@@ -1,15 +1,16 @@
 use serde::Deserialize;
 use std::{collections::HashSet, path::PathBuf};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     #[serde(flatten)]
     pub basic: Basic,
 
+    #[serde(default)]
     pub rule: Vec<Rule>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Basic {
     pub db_path: PathBuf,
     #[serde(default = "media_ext_default")]
@@ -18,7 +19,7 @@ pub struct Basic {
     pub ignore: HashSet<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Rule {
     pub src: PathBuf,
     pub target: PathBuf,
