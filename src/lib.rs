@@ -2,7 +2,7 @@
 extern crate log;
 
 mod config;
-pub use config::{Config, Basic, Rule};
+pub use config::{Basic, Config, Rule};
 
 mod runner;
 pub use runner::{run_on, Ctx};
