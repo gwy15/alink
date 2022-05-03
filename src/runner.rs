@@ -87,7 +87,7 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
     if let Some(link_record) = db::Link::from_src(&file, &ctx.pool).await? {
         let linked_path = PathBuf::from(link_record.target);
         if linked_path.exists() {
-            info!("DB 缓存存在而且验证成功，跳过: {}", linked_path.display());
+            debug!("DB 缓存存在而且验证成功，跳过: {}", linked_path.display());
             return Ok(());
         } else {
             warn!("DB 缓存存在，但是目标不存在，删除 DB 缓存");
@@ -107,7 +107,7 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
         if ideal_target.metadata()?.ino() != file.metadata()?.ino() {
             warn!("目标存在，但是两个文件 inode 不匹配");
         }
-        info!("目标已存在，跳过: {}", ideal_target.display());
+        debug!("目标已存在，跳过: {}", ideal_target.display());
         db::Link::link(&file, &ideal_target, &ctx.pool).await?;
         return Ok(());
     }
