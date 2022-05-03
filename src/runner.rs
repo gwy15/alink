@@ -47,6 +47,7 @@ pub fn run_on(path: PathBuf, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<()>
         Ok(())
     })
 }
+
 async fn run_on_dir(path: PathBuf, ctx: Ctx) -> Result<()> {
     anyhow::ensure!(path.is_dir(), "path {} is not a directory", path.display());
 
@@ -70,6 +71,7 @@ async fn run_on_dir(path: PathBuf, ctx: Ctx) -> Result<()> {
 
     Ok(())
 }
+
 async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
     if !is_media(&file, &ctx.basic.media_ext)? {
         return Ok(());
