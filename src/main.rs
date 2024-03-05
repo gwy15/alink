@@ -36,7 +36,7 @@ fn load_config(config_path: &Path) -> Result<alink::Config> {
         config_path.metadata()?
     );
 
-    let config_s = std::fs::read_to_string(&config_path)
+    let config_s = std::fs::read_to_string(config_path)
         .with_context(|| format!("配置文件 {} 打开失败", config_path.display()))?;
     trace!("config_s = \n{}", config_s);
     let config = toml::from_str(&config_s).context("parse config toml failed")?;
