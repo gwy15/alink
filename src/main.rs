@@ -201,6 +201,7 @@ async fn run_config(
             src: Arc::new(src.clone()),
             target: Arc::new(target),
             relative: PathBuf::new(),
+            #[cfg(unix)]
             inode_to_path: Default::default(),
             dry_run,
         };
