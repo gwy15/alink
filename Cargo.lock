@@ -46,6 +46,7 @@ dependencies = [
  "anyhow",
  "clap",
  "log",
+ "parking_lot",
  "pretty_env_logger",
  "serde",
  "sqlx",

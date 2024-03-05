@@ -13,7 +13,12 @@ use std::{
 use tokio::fs;
 
 #[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
+use parking_lot::Mutex;
+#[cfg(unix)]
+use std::{collections::HashMap, os::unix::fs::MetadataExt};
+
+#[cfg(unix)]
+type Cache = HashMap<u64, PathBuf>;
 
 #[derive(Debug, Clone)]
 pub struct Ctx {
@@ -23,6 +28,9 @@ pub struct Ctx {
     pub target: Arc<PathBuf>,
     /// 相对于 src 的路径
     pub relative: PathBuf,
+    #[cfg(unix)]
+    /// 快速定位 inode -> target PathBuf
+    pub inode_to_path: Arc<Mutex<Cache>>,
 
     pub dry_run: bool,
 }
@@ -107,7 +115,8 @@ async fn run_on_file(file: PathBuf, ctx: Ctx) -> Result<()> {
     if file.metadata()?.nlink() > 1 {
         info!("文件存在硬链接，搜索: {}", file.display());
         let src_inode = file.metadata()?.ino();
-        let search_result = search_target(ctx.target.as_ref().clone(), src_inode).await?;
+        let search_result =
+            search_target(ctx.target.as_ref().clone(), src_inode, &ctx.inode_to_path)?;
         if let Some(target) = search_result {
             info!("搜索到目标: {}", target.display());
             db::Link::link(&file, &target, &ctx.pool).await?;
@@ -152,22 +161,38 @@ fn is_media(file: &Path, media_ext: &HashSet<String>) -> Result<bool> {
 }
 
 #[cfg(unix)]
-fn search_target(
+fn search_target(path: PathBuf, inode: u64, cache: &Mutex<Cache>) -> Result<Option<PathBuf>> {
+    if let Some(target) = cache.lock().remove(&inode) {
+        if target.exists() && target.metadata()?.ino() == inode {
+            return Ok(Some(target));
+        }
+    }
+    search_target_recursive(path, inode, cache)
+}
+
+#[cfg(unix)]
+fn search_target_recursive(
     path: PathBuf,
     inode: u64,
-) -> Pin<Box<dyn Future<Output = Result<Option<PathBuf>>>>> {
-    Box::pin(async move {
-        let mut read_dir = fs::read_dir(path).await?;
-        while let Some(entry) = read_dir.next_entry().await? {
-            let entry_path = entry.path();
-            if entry_path.is_dir() {
-                if let Some(target) = search_target(entry_path, inode).await? {
-                    return Ok(Some(target));
-                }
-            } else if entry_path.metadata()?.ino() == inode {
+    cache: &Mutex<Cache>,
+) -> Result<Option<PathBuf>> {
+    let read_dir = std::fs::read_dir(path)?;
+    for entry in read_dir {
+        let entry = entry?;
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            if let Some(target) = search_target_recursive(entry_path, inode, cache)? {
+                return Ok(Some(target));
+            }
+        } else {
+            // file
+            let this_inode = entry_path.metadata()?.ino();
+            if this_inode == inode {
                 return Ok(Some(entry_path));
+            } else {
+                cache.lock().insert(this_inode, entry_path.clone());
             }
         }
-        Ok(None)
-    })
+    }
+    Ok(None)
 }
