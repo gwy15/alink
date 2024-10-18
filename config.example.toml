@@ -1,0 +1,11 @@
+[basic]
+db_path = "./db.sqlite"
+ignore = ["@eaDir"]
+link_ext = ["mp4", "mkv", "avi", "flv", "ts", "mov", "wmv", "webm"]
+copy_ext = ["srt", "ass", "ssa", "sub", "vtt", "nfo", "jpg", "png"]
+uid = 0
+gid = 0
+
+[[rule]]
+src = "/media/download/movies"
+target = "/media/managed/movies"

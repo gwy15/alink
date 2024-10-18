@@ -3,7 +3,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    #[serde(flatten)]
+    pub db_path: PathBuf,
     pub basic: Basic,
 
     #[serde(default)]
@@ -12,26 +12,17 @@ pub struct Config {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Basic {
-    pub db_path: PathBuf,
-    #[serde(default = "media_ext_default")]
-    pub media_ext: HashSet<String>,
-    #[serde(default = "ignore")]
     pub ignore: HashSet<String>,
+    pub link_ext: HashSet<String>,
+    pub copy_ext: HashSet<String>,
+    #[cfg(unix)]
+    pub uid: Option<u32>,
+    #[cfg(unix)]
+    pub gid: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Rule {
     pub src: PathBuf,
     pub target: PathBuf,
-}
-
-fn media_ext_default() -> HashSet<String> {
-    ["mp4", "mkv", "avi", "flv", "ts", "mov", "wmv", "webm"]
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect()
-}
-
-fn ignore() -> HashSet<String> {
-    ["@eaDir"].into_iter().map(|s| s.to_string()).collect()
 }

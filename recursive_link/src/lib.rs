@@ -3,18 +3,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub struct PathHandler {
-    pub file: Box<dyn FnMut(&Path) -> FileOperation>,
-    pub dir: Box<dyn FnMut(&Path) -> DirOperation>,
-    pub symlink: Box<dyn FnMut(&Path) -> SymLinkOperation>,
+pub trait PathHandler {
+    fn handle_file(&self, path: &Path) -> FileOperation;
+    fn handle_dir(&self, path: &Path) -> DirOperation;
+    fn handle_symlink(&self, path: &Path) -> SymLinkOperation;
 }
 
+#[derive(Default)]
 pub struct Perm {
     #[cfg(unix)]
-    uid: Option<u32>,
+    pub uid: Option<u32>,
     #[cfg(unix)]
-    gid: Option<u32>,
-    permissions: Option<std::fs::Permissions>,
+    pub gid: Option<u32>,
+    pub permissions: Option<std::fs::Permissions>,
 }
 impl Perm {
     pub fn apply(self, path: &Path) -> io::Result<()> {
@@ -50,7 +51,12 @@ pub enum SymLinkOperation {
     },
 }
 
-pub fn link_dir(src: PathBuf, target: PathBuf, mut handle: PathHandler) -> io::Result<()> {
+pub fn link_dir<H: PathHandler>(
+    src: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+    handle: &H,
+) -> io::Result<()> {
+    let (src, target) = (src.as_ref(), target.as_ref());
     if src.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -70,19 +76,19 @@ pub fn link_dir(src: PathBuf, target: PathBuf, mut handle: PathHandler) -> io::R
         ));
     }
 
-    run_on_dir(src, target, &mut handle)?;
+    run_on_dir(src, target, handle)?;
 
     Ok(())
 }
 
-fn run_on_dir(src: PathBuf, target: PathBuf, handle: &mut PathHandler) -> io::Result<()> {
+fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Result<()> {
     for src_entry in fs::read_dir(&src)? {
         let src_entry = src_entry?;
         let src_file_name = src_entry.file_name();
         let src_path = src_entry.path();
         let target_path = target.join(src_file_name);
         if src_path.is_file() {
-            match (handle.file)(&src_path) {
+            match handle.handle_file(&src_path) {
                 FileOperation::Skip => continue,
                 FileOperation::Link => {
                     fs::hard_link(src_path, target_path)?;
@@ -93,7 +99,7 @@ fn run_on_dir(src: PathBuf, target: PathBuf, handle: &mut PathHandler) -> io::Re
                 }
             }
         } else if src_path.is_symlink() {
-            match (handle.symlink)(&src_path) {
+            match handle.handle_symlink(&src_path) {
                 SymLinkOperation::Skip => continue,
                 SymLinkOperation::LinkTarget => {
                     let target = fs::canonicalize(&target_path)?;
@@ -108,13 +114,13 @@ fn run_on_dir(src: PathBuf, target: PathBuf, handle: &mut PathHandler) -> io::Re
                 }
             }
         } else if src_path.is_dir() {
-            match (handle.dir)(&src_path) {
+            match handle.handle_dir(&src_path) {
                 DirOperation::Skip => continue,
                 DirOperation::Process { perm } => {
                     // mkdir target_path
                     fs::create_dir(&target_path)?;
                     perm.apply(&target_path)?;
-                    run_on_dir(src_path, target_path, handle)?;
+                    run_on_dir(&src_path, &target_path, handle)?;
                 }
             }
         }

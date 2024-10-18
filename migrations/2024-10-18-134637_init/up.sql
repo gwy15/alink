@@ -1,4 +1,4 @@
--- Add up migration script here
+-- Your SQL goes here
 CREATE TABLE `links` (
     `id`            INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
     `src`           TEXT        NOT NULL,
