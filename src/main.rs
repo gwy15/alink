@@ -5,6 +5,7 @@ mod config;
 mod schema;
 mod db;
 mod cli;
+mod handler;
 
 use clap::Parser;
 
