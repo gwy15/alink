@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate tracing;
 
 mod config;
 mod schema;

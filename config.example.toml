@@ -1,5 +1,6 @@
-[basic]
 db_path = "./db.sqlite"
+
+[basic]
 ignore = ["@eaDir"]
 link_ext = ["mp4", "mkv", "avi", "flv", "ts", "mov", "wmv", "webm"]
 copy_ext = ["srt", "ass", "ssa", "sub", "vtt", "nfo", "jpg", "png"]

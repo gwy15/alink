@@ -1,7 +1,4 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path};
 
 pub trait PathHandler {
     fn handle_file(&self, path: &Path) -> FileOperation;
@@ -57,6 +54,12 @@ pub fn link_dir<H: PathHandler>(
     handle: &H,
 ) -> io::Result<()> {
     let (src, target) = (src.as_ref(), target.as_ref());
+    if !src.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Source path does not exist. Create the source path first.",
+        ));
+    }
     if src.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -66,7 +69,7 @@ pub fn link_dir<H: PathHandler>(
     if !target.exists() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "target does not exist. Create the target first.",
+            "Target path does not exist. Create the target path first.",
         ));
     }
     if target.is_file() {

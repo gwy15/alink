@@ -35,6 +35,7 @@ impl PathHandler for config::Basic {
         if self.should_ignore(path) {
             DirOperation::Skip
         } else {
+            debug!("process directory {}", path.display());
             DirOperation::Process { perm: self.perm() }
         }
     }
@@ -46,9 +47,11 @@ impl PathHandler for config::Basic {
             return FileOperation::Skip;
         };
         if self.link_ext.contains(ext) {
+            debug!("link {}", path.display());
             return FileOperation::Link;
         }
         if self.copy_ext.contains(ext) {
+            debug!("copy {}", path.display());
             return FileOperation::Copy { perm: self.perm() };
         }
         FileOperation::Skip
@@ -60,6 +63,7 @@ impl PathHandler for config::Basic {
 
 impl Cli {
     pub fn run(self) -> Result<()> {
+        tracing_subscriber::fmt::init();
         let config_s =
             std::fs::read_to_string(self.config.as_path()).context("Cannot read config file")?;
         let config = toml::from_str::<config::Config>(&config_s)?;
@@ -70,7 +74,11 @@ impl Cli {
         Ok(())
     }
     fn run_rule(basic: &config::Basic, rule: &config::Rule) -> Result<()> {
-        link_dir(rule.src.as_path(), rule.target.as_path(), basic)?;
+        let (src, target) = (rule.src.as_path(), rule.target.as_path());
+        let task_name = format!("{} => {}", src.display(), target.display());
+        info!("Running task {task_name}...");
+        link_dir(src, target, basic).with_context(|| format!("Run task {task_name} failed"))?;
+        info!("Task {task_name} finished.");
         Ok(())
     }
 }
