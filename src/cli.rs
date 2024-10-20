@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-use crate::{config, handler::Handler};
+use crate::{config, handler::Handler, searcher};
 
 #[derive(clap::Parser)]
 pub struct Cli {
@@ -19,8 +19,9 @@ impl Cli {
             .context("Create db with db_url failed. Please check config db_url")?;
 
         let handler = Handler {
-            basic: config.basic,
+            basic: &config.basic,
             db,
+            searcher: searcher::PathSearcher::new(&config.basic.ignore),
         };
         for rule in config.rule.iter() {
             Self::run_rule(&handler, rule)?;

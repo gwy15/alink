@@ -1,4 +1,4 @@
-use crate::{config, db};
+use crate::{config, db, searcher};
 use anyhow::Result;
 use recursive_link::*;
 use std::{
@@ -6,12 +6,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub struct Handler {
-    pub basic: config::Basic,
+pub struct Handler<'s> {
+    pub basic: &'s config::Basic,
     pub db: db::Pool,
+    #[cfg_attr(not(unix), allow(unused))]
+    pub searcher: searcher::PathSearcher<'s>,
 }
 
-impl Handler {
+impl Handler<'_> {
     fn should_ignore(&self, path: &Path) -> bool {
         let Some(p) = path.file_name() else {
             return false;
@@ -67,10 +69,16 @@ impl Handler {
                 db::Link::delete(entry.id, &mut conn)?;
             }
         }
-        // 3. do a search
+        // 3. do a disk search
         #[cfg(unix)]
         if src.metadata()?.nlink() > 1 {
-            //
+            let config_path = ();
+            if let Some(path) = self.searcher.search(src_inode, config_path)? {
+                if path.exists() && path.metadata()?.ino() == src_inode {
+                    db::Link::link(&src_s, &target_s, &mut conn)?;
+                    return Ok(FileOperation::Skip);
+                }
+            }
         }
 
         // 4. do db-link first
@@ -80,7 +88,7 @@ impl Handler {
         return Ok(FileOperation::Link);
     }
 }
-impl PathHandler for Handler {
+impl PathHandler for Handler<'_> {
     fn handle_dir(&self, path: &Path, _target: &Path) -> io::Result<DirOperation> {
         let ans = if self.should_ignore(path) {
             DirOperation::Skip

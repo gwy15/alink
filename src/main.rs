@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate tracing;
 
-mod config;
-mod schema;
-mod db;
 mod cli;
+mod config;
+mod db;
 mod handler;
+mod schema;
+mod searcher;
 
 use clap::Parser;
 
