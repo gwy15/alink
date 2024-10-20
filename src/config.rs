@@ -3,7 +3,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    pub db_path: PathBuf,
+    pub db_url: String,
     pub basic: Basic,
 
     #[serde(default)]

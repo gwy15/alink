@@ -1,11 +1,14 @@
-use crate::config;
+use crate::{config, db};
 use anyhow::Result;
 use recursive_link::*;
-use std::path::Path;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 pub struct Handler {
     pub basic: config::Basic,
-    pub rule: config::Rule,
+    pub db: db::Pool,
 }
 
 impl Handler {
@@ -27,39 +30,87 @@ impl Handler {
             ..Default::default()
         }
     }
-    fn pre_link_check(&self, file: &Path) -> Result<()> {
-        let ideal = file.to
-        Ok(())
+    fn handle_link_file(&self, src: &Path, target: &Path) -> Result<FileOperation> {
+        // 1. if target exists and have same inode, skip
+        #[cfg(unix)]
+        let src_inode = src.metadata()?.ino();
+        if target.exists() {
+            #[cfg(unix)]
+            {
+                let target_inode = target.metadata()?.ino();
+                if src_inode == target_inode {
+                    return Ok(FileOperation::Skip);
+                } else {
+                    // ??? skip now
+                    return Ok(FileOperation::Skip);
+                }
+            }
+        }
+        // 2. check cached db entry
+        let src_s = src.as_os_str().to_string_lossy();
+        let mut conn = self.db.get()?;
+        let entry = db::Link::from_src(&src_s, &mut conn)?;
+        if let Some(entry) = entry {
+            let actual_target = PathBuf::from(entry.target);
+            let exists = actual_target.exists();
+            if exists {
+                // 不检查了
+                // #[cfg(unix)] {
+                //     if src_inode == actual_target.metadata()?.ino() {
+                //         return Ok(Some(FileOperation::Skip));
+                //     } else {
+                //         // ??
+                //     }
+                // }
+                return Ok(FileOperation::Skip);
+            } else {
+                db::Link::delete(entry.id, &mut conn)?;
+            }
+        }
+        // 3. do a search
+        #[cfg(unix)]
+        if src.metadata()?.nlink() > 1 {
+            //
+        }
+
+        // 4. do db-link first
+        debug!("link {} => {}", src.display(), target.display());
+        let target_s = src.as_os_str().to_string_lossy();
+        db::Link::link(&src_s, &target_s, &mut conn)?;
+        return Ok(FileOperation::Link);
     }
 }
 impl PathHandler for Handler {
-    fn handle_dir(&self, path: &std::path::Path) -> DirOperation {
-        if self.should_ignore(path) {
+    fn handle_dir(&self, path: &Path, _target: &Path) -> io::Result<DirOperation> {
+        let ans = if self.should_ignore(path) {
             DirOperation::Skip
         } else {
             debug!("process directory {}", path.display());
             DirOperation::Process { perm: self.perm() }
-        }
+        };
+        Ok(ans)
     }
-    fn handle_file(&self, path: &Path) -> FileOperation {
+    fn handle_file(&self, path: &Path, target: &Path) -> io::Result<FileOperation> {
         if self.should_ignore(path) {
-            return FileOperation::Skip;
+            return Ok(FileOperation::Skip);
         }
         let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-            return FileOperation::Skip;
+            return Ok(FileOperation::Skip);
         };
         if self.basic.link_ext.contains(ext) {
-            debug!("link {}", path.display());
-            return FileOperation::Link;
+            return self
+                .handle_link_file(path, target)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
         }
         if self.basic.copy_ext.contains(ext) {
             // FIXME: copy 移动之后没法跟踪
             debug!("copy {}", path.display());
-            return FileOperation::Copy { perm: self.perm() };
+            let op = FileOperation::Copy { perm: self.perm() };
+            return Ok(op);
         }
-        FileOperation::Skip
+        Ok(FileOperation::Skip)
     }
-    fn handle_symlink(&self, _path: &Path) -> SymLinkOperation {
-        SymLinkOperation::Skip
+    fn handle_symlink(&self, _path: &Path, _target: &Path) -> io::Result<SymLinkOperation> {
+        Ok(SymLinkOperation::Skip)
     }
 }

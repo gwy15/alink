@@ -1,9 +1,9 @@
 use std::{fs, io, path::Path};
 
 pub trait PathHandler {
-    fn handle_file(&self, path: &Path) -> FileOperation;
-    fn handle_dir(&self, path: &Path) -> DirOperation;
-    fn handle_symlink(&self, path: &Path) -> SymLinkOperation;
+    fn handle_file(&self, path: &Path, target: &Path) -> io::Result<FileOperation>;
+    fn handle_dir(&self, path: &Path, target: &Path) -> io::Result<DirOperation>;
+    fn handle_symlink(&self, path: &Path, target: &Path) -> io::Result<SymLinkOperation>;
 }
 
 #[derive(Default)]
@@ -91,7 +91,7 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Resu
         let src_path = src_entry.path();
         let target_path = target.join(src_file_name);
         if src_path.is_file() {
-            match handle.handle_file(&src_path) {
+            match handle.handle_file(&src_path, &target_path)? {
                 FileOperation::Skip => continue,
                 FileOperation::Link => {
                     fs::hard_link(src_path, target_path)?;
@@ -102,7 +102,7 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Resu
                 }
             }
         } else if src_path.is_symlink() {
-            match handle.handle_symlink(&src_path) {
+            match handle.handle_symlink(&src_path, &target_path)? {
                 SymLinkOperation::Skip => continue,
                 SymLinkOperation::LinkTarget => {
                     let target = fs::canonicalize(&target_path)?;
@@ -117,7 +117,7 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Resu
                 }
             }
         } else if src_path.is_dir() {
-            match handle.handle_dir(&src_path) {
+            match handle.handle_dir(&src_path, &target_path)? {
                 DirOperation::Skip => continue,
                 DirOperation::Process { perm } => {
                     // mkdir target_path

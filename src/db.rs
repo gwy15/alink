@@ -1,7 +1,5 @@
 use crate::schema;
-use anyhow::{Context, Result};
 use diesel::prelude::*;
-use std::path::Path;
 
 pub type Conn = diesel::SqliteConnection;
 pub type Pool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<Conn>>;
@@ -15,27 +13,30 @@ pub struct Link {
 }
 
 impl Link {
-    pub fn from_src(src: &Path, conn: &mut Conn) -> Result<Option<Self>> {
-        let src_str = src.to_str().context("cannot convert path to str")?;
+    pub fn from_src(src: &str, conn: &mut Conn) -> QueryResult<Option<Self>> {
         let link = schema::links::dsl::links
             .select(Link::as_select())
-            .filter(schema::links::src.eq(src_str))
+            .filter(schema::links::src.eq(src))
             .first::<Self>(conn)
             .optional()?;
         Ok(link)
     }
 
-    pub fn delete(id: i32, conn: &mut Conn) -> Result<()> {
+    pub fn delete(id: i32, conn: &mut Conn) -> QueryResult<()> {
         diesel::delete(schema::links::table.filter(schema::links::id.eq(id))).execute(conn)?;
         Ok(())
     }
 
-    pub fn link(src: &Path, target: &Path, conn: &mut Conn) -> Result<()> {
-        let src = src.to_str().context("cannot convert path to str")?;
-        let target = target.to_str().context("cannot convert path to str")?;
+    pub fn link(src: &str, target: &str, conn: &mut Conn) -> QueryResult<()> {
         diesel::insert_into(schema::links::table)
             .values((schema::links::src.eq(src), schema::links::target.eq(target)))
             .execute(conn)?;
         Ok(())
     }
+}
+
+pub fn new_pool(db_url: String) -> anyhow::Result<Pool> {
+    let man = diesel::r2d2::ConnectionManager::new(db_url);
+    let pool = Pool::builder().build(man)?;
+    Ok(pool)
 }

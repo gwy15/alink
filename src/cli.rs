@@ -15,8 +15,12 @@ impl Cli {
         let config_s =
             std::fs::read_to_string(self.config.as_path()).context("Cannot read config file")?;
         let config = toml::from_str::<config::Config>(&config_s)?;
+        let db = crate::db::new_pool(config.db_url.clone())
+            .context("Create db with db_url failed. Please check config db_url")?;
+
         let handler = Handler {
             basic: config.basic,
+            db,
         };
         for rule in config.rule.iter() {
             Self::run_rule(&handler, rule)?;
