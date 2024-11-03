@@ -18,23 +18,25 @@ impl Cli {
         let db = crate::db::new_pool(config.db_url.clone())
             .context("Create db with db_url failed. Please check config db_url")?;
 
-        let handler = Handler {
-            basic: &config.basic,
-            db,
-            searcher: searcher::PathSearcher::new(&config.basic.ignore),
-        };
         for rule in config.rule.iter() {
-            Self::run_rule(&handler, rule)?;
+            Self::run_rule(&config.basic, rule, db.clone())?;
         }
 
         Ok(())
     }
-    fn run_rule(handler: &Handler, rule: &config::Rule) -> Result<()> {
+    fn run_rule(basic: &config::Basic, rule: &config::Rule, db: crate::db::Pool) -> Result<()> {
         let (src, target) = (rule.src.as_path(), rule.target.as_path());
         let task_name = format!("{} => {}", src.display(), target.display());
         info!("Running task {task_name}...");
 
-        recursive_link::link_dir(src, target, handler)
+        let handler = Handler {
+            basic,
+            rule,
+            db,
+            searcher: searcher::PathSearcher::new(&basic.ignore),
+        };
+
+        recursive_link::link_dir(src, target, &handler)
             .with_context(|| format!("Run task {task_name} failed"))?;
         info!("Task {task_name} finished.");
         Ok(())

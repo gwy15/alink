@@ -85,7 +85,7 @@ pub fn link_dir<H: PathHandler>(
 }
 
 fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Result<()> {
-    for src_entry in fs::read_dir(&src)? {
+    for src_entry in fs::read_dir(src)? {
         let src_entry = src_entry?;
         let src_file_name = src_entry.file_name();
         let src_path = src_entry.path();

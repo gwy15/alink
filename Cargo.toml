@@ -19,6 +19,7 @@ notify = "4.0.17"
 tracing = "0.1.40"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 tracing-subscriber = { version = "0.3.18", features = ["fmt"] }
+diesel_migrations = "2.2.0"
 
 [dependencies.diesel]
 version = "2"

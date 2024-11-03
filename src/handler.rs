@@ -8,6 +8,8 @@ use std::{
 
 pub struct Handler<'s> {
     pub basic: &'s config::Basic,
+    #[cfg_attr(not(unix), allow(unused))]
+    pub rule: &'s config::Rule,
     pub db: db::Pool,
     #[cfg_attr(not(unix), allow(unused))]
     pub searcher: searcher::PathSearcher<'s>,
@@ -44,9 +46,12 @@ impl Handler<'_> {
                     return Ok(FileOperation::Skip);
                 } else {
                     // ??? skip now
+                    warn!("target exists but inode did not match!");
                     return Ok(FileOperation::Skip);
                 }
             }
+            #[cfg(not(unix))]
+            return Ok(FileOperation::Skip);
         }
         // 2. check cached db entry
         let src_s = src.as_os_str().to_string_lossy();
@@ -72,7 +77,7 @@ impl Handler<'_> {
         // 3. do a disk search
         #[cfg(unix)]
         if src.metadata()?.nlink() > 1 {
-            let config_path = ();
+            let config_path = self.rule.target.as_path();
             if let Some(path) = self.searcher.search(src_inode, config_path)? {
                 if path.exists() && path.metadata()?.ino() == src_inode {
                     db::Link::link(&src_s, &target_s, &mut conn)?;
@@ -85,7 +90,7 @@ impl Handler<'_> {
         debug!("link {} => {}", src.display(), target.display());
         let target_s = src.as_os_str().to_string_lossy();
         db::Link::link(&src_s, &target_s, &mut conn)?;
-        return Ok(FileOperation::Link);
+        Ok(FileOperation::Link)
     }
 }
 impl PathHandler for Handler<'_> {

@@ -95,12 +95,12 @@ impl<'s> FileYielder<'s> {
             Err(e) => return Some(Err(e)),
         };
         match self.on_dir_entry(entry) {
-            Ok(Some(data)) => return Some(Ok(data)),
+            Ok(Some(data)) => Some(Ok(data)),
             Ok(None) => {
                 // read a link, continue
-                return self._next();
+                self._next()
             }
-            Err(e) => return Some(Err(e)),
+            Err(e) => Some(Err(e)),
         }
     }
     fn on_dir_entry(&mut self, entry: fs::DirEntry) -> io::Result<Option<PathBuf>> {

@@ -1,8 +1,11 @@
 use crate::schema;
 use diesel::prelude::*;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
 pub type Conn = diesel::SqliteConnection;
 pub type Pool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<Conn>>;
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 #[derive(Queryable, PartialEq, Debug, Selectable)]
 #[diesel(table_name = schema::links)]
@@ -38,5 +41,12 @@ impl Link {
 pub fn new_pool(db_url: String) -> anyhow::Result<Pool> {
     let man = diesel::r2d2::ConnectionManager::new(db_url);
     let pool = Pool::builder().build(man)?;
+
+    let mut conn = pool.get()?;
+    let result = conn
+        .run_pending_migrations(MIGRATIONS)
+        .expect("Run migration failed");
+    info!("Db migration done: {result:?}");
+
     Ok(pool)
 }
