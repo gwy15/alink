@@ -1,4 +1,6 @@
+use anyhow::{bail, Context};
 use std::{fs, io, path::Path};
+use tracing::*;
 
 pub trait PathHandler {
     fn handle_file(&self, path: &Path, target: &Path) -> io::Result<FileOperation>;
@@ -6,7 +8,7 @@ pub trait PathHandler {
     fn handle_symlink(&self, path: &Path, target: &Path) -> io::Result<SymLinkOperation>;
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Perm {
     #[cfg(unix)]
     pub uid: Option<u32>,
@@ -27,15 +29,18 @@ impl Perm {
     }
 }
 
+#[derive(Debug)]
 pub enum FileOperation {
     Skip,
     Link,
     Copy { perm: Perm },
 }
+#[derive(Debug)]
 pub enum DirOperation {
     Skip,
     Process { perm: Perm },
 }
+#[derive(Debug)]
 pub enum SymLinkOperation {
     Skip,
     /// follow symlink and hard link its final target
@@ -52,31 +57,19 @@ pub fn link_dir<H: PathHandler>(
     src: impl AsRef<Path>,
     target: impl AsRef<Path>,
     handle: &H,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     let (src, target) = (src.as_ref(), target.as_ref());
     if !src.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Source path does not exist. Create the source path first.",
-        ));
+        bail!("Source path does not exist. Create the source path first.");
     }
     if src.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "src is not directory",
-        ));
+        bail!("src is not directory");
     }
     if !target.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Target path does not exist. Create the target path first.",
-        ));
+        bail!("Target path does not exist. Create the target path first.");
     }
     if target.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "target is not directory",
-        ));
+        bail!("target is not directory");
     }
 
     run_on_dir(src, target, handle)?;
@@ -84,46 +77,68 @@ pub fn link_dir<H: PathHandler>(
     Ok(())
 }
 
-fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> io::Result<()> {
+fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> anyhow::Result<()> {
     for src_entry in fs::read_dir(src)? {
         let src_entry = src_entry?;
         let src_file_name = src_entry.file_name();
         let src_path = src_entry.path();
         let target_path = target.join(src_file_name);
+        debug!("Run {} => {}", src_path.display(), target_path.display());
         if src_path.is_file() {
-            match handle.handle_file(&src_path, &target_path)? {
+            let op = handle
+                .handle_file(&src_path, &target_path)
+                .with_context(|| format!("handle file {} failed", src_path.display()))?;
+            debug!("handle file {} op={op:?}", src_path.display());
+            match op {
                 FileOperation::Skip => continue,
                 FileOperation::Link => {
-                    fs::hard_link(src_path, target_path)?;
+                    fs::hard_link(src_path, target_path).context("hard link failed")?;
                 }
                 FileOperation::Copy { perm } => {
-                    fs::copy(src_path, &target_path)?;
-                    perm.apply(&target_path)?;
+                    fs::copy(src_path, &target_path).context("copy failed")?;
+                    perm.apply(&target_path).context("apply perm failed")?;
                 }
             }
         } else if src_path.is_symlink() {
-            match handle.handle_symlink(&src_path, &target_path)? {
+            let op = handle
+                .handle_symlink(&src_path, &target_path)
+                .with_context(|| format!("handle symlink {} failed", src_path.display()))?;
+            debug!("handle symlink {} op={op:?}", src_path.display());
+            match op {
                 SymLinkOperation::Skip => continue,
                 SymLinkOperation::LinkTarget => {
-                    let target = fs::canonicalize(&target_path)?;
+                    let src_path =
+                        fs::canonicalize(&src_path).context("canonicalize src path failed")?;
                     fs::hard_link(src_path, target)?;
                 }
                 SymLinkOperation::LinkSymlink => {
-                    fs::hard_link(src_path, target_path)?;
+                    fs::hard_link(src_path, target_path).context("create hard link failed")?;
                 }
                 SymLinkOperation::CopyTarget { perm } => {
-                    fs::copy(src_path, &target_path)?;
-                    perm.apply(&target_path)?;
+                    fs::copy(src_path, &target_path).context("copy target failed")?;
+                    perm.apply(&target_path).context("apply perm failed")?;
                 }
             }
         } else if src_path.is_dir() {
-            match handle.handle_dir(&src_path, &target_path)? {
+            let op = handle
+                .handle_dir(&src_path, &target_path)
+                .with_context(|| format!("handle dir {} failed", src_path.display()))?;
+            debug!("handle dir {} op={op:?}", src_path.display());
+            match op {
                 DirOperation::Skip => continue,
                 DirOperation::Process { perm } => {
-                    // mkdir target_path
-                    fs::create_dir(&target_path)?;
-                    perm.apply(&target_path)?;
-                    run_on_dir(&src_path, &target_path, handle)?;
+                    if !target_path.exists() {
+                        fs::create_dir(&target_path).context("create dir failed")?;
+                        perm.apply(&target_path)
+                            .context("apply perm to dir failed")?;
+                    }
+                    run_on_dir(&src_path, &target_path, handle).with_context(|| {
+                        format!(
+                            "recursive run on {} => {} failed",
+                            src_path.display(),
+                            target_path.display()
+                        )
+                    })?;
                 }
             }
         }

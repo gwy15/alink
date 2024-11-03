@@ -786,6 +786,10 @@ dependencies = [
 [[package]]
 name = "recursive_link"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tracing",
+]
 
 [[package]]
 name = "redox_syscall"
