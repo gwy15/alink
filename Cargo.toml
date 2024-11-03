@@ -13,7 +13,7 @@ recursive_link.path = "./recursive_link"
 anyhow = "1.0.56"
 serde = { version = "1.0.136", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
-parking_lot = "0.12.1"
+parking_lot = "0.12.3"
 toml = "0.5.8"
 notify = "4.0.17"
 tracing = "0.1.40"

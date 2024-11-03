@@ -1,5 +1,6 @@
 use crate::{config, db, searcher};
 use anyhow::Result;
+use parking_lot::Mutex;
 use recursive_link::*;
 use std::{
     io,
@@ -14,7 +15,7 @@ pub struct Handler<'s> {
     pub rule: &'s config::Rule,
     pub db: db::Pool,
     #[cfg_attr(not(unix), allow(unused))]
-    pub searcher: searcher::PathSearcher<'s>,
+    pub searcher: Mutex<searcher::PathSearcher<'s>>,
 }
 
 impl Handler<'_> {
@@ -80,7 +81,8 @@ impl Handler<'_> {
         #[cfg(unix)]
         if src.metadata()?.nlink() > 1 {
             let config_path = self.rule.target.as_path();
-            if let Some(target) = self.searcher.search(src_inode, config_path)? {
+            let mut searcher = self.searcher.lock();
+            if let Some(target) = searcher.search(src_inode, config_path)? {
                 if target.exists() && target.metadata()?.ino() == src_inode {
                     let target_s = target.as_os_str().to_string_lossy();
                     db::Link::link(&src_s, &target_s, &mut conn)?;

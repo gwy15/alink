@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
 use std::path::PathBuf;
 
 use crate::{config, handler::Handler, searcher};
@@ -33,7 +34,7 @@ impl Cli {
             basic,
             rule,
             db,
-            searcher: searcher::PathSearcher::new(&basic.ignore),
+            searcher: Mutex::new(searcher::PathSearcher::new(&basic.ignore)),
         };
 
         recursive_link::link_dir(src, target, &handler)
