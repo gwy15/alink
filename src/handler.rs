@@ -5,6 +5,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 
 pub struct Handler<'s> {
     pub basic: &'s config::Basic,
@@ -28,9 +30,9 @@ impl Handler<'_> {
     fn perm(&self) -> recursive_link::Perm {
         Perm {
             #[cfg(unix)]
-            uid: self.uid,
+            uid: self.basic.uid,
             #[cfg(unix)]
-            gid: self.gid,
+            gid: self.basic.gid,
             ..Default::default()
         }
     }
@@ -78,8 +80,9 @@ impl Handler<'_> {
         #[cfg(unix)]
         if src.metadata()?.nlink() > 1 {
             let config_path = self.rule.target.as_path();
-            if let Some(path) = self.searcher.search(src_inode, config_path)? {
-                if path.exists() && path.metadata()?.ino() == src_inode {
+            if let Some(target) = self.searcher.search(src_inode, config_path)? {
+                if target.exists() && target.metadata()?.ino() == src_inode {
+                    let target_s = target.as_os_str().to_string_lossy();
                     db::Link::link(&src_s, &target_s, &mut conn)?;
                     return Ok(FileOperation::Skip);
                 }

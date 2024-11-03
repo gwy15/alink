@@ -5,6 +5,8 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 
 #[cfg_attr(not(unix), allow(unused))]
 pub struct PathSearcher<'s> {
