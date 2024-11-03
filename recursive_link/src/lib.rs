@@ -1,5 +1,8 @@
 use anyhow::{bail, Context};
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 use tracing::*;
 
 pub trait PathHandler {
@@ -72,12 +75,46 @@ pub fn link_dir<H: PathHandler>(
         bail!("target is not directory");
     }
 
-    run_on_dir(src, target, handle)?;
+    run_on_dir(src, target, handle, &mut Stack::default())?;
 
     Ok(())
 }
 
-fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> anyhow::Result<()> {
+struct StackFrame {
+    target_dir: PathBuf,
+    perm: Perm,
+}
+impl StackFrame {
+    pub fn run(self) -> anyhow::Result<()> {
+        if !self.target_dir.exists() {
+            fs::create_dir(&self.target_dir).context("create dir failed")?;
+            self.perm
+                .apply(&self.target_dir)
+                .context("apply perm to dir failed")?;
+        }
+        Ok(())
+    }
+}
+/// 减少空 target
+#[derive(Default)]
+struct Stack {
+    frames: Vec<StackFrame>,
+}
+impl Stack {
+    pub fn run(&mut self) -> anyhow::Result<()> {
+        for frame in self.frames.drain(..) {
+            frame.run()?;
+        }
+        Ok(())
+    }
+}
+
+fn run_on_dir<H: PathHandler>(
+    src: &Path,
+    target: &Path,
+    handle: &H,
+    stack: &mut Stack,
+) -> anyhow::Result<()> {
     for src_entry in fs::read_dir(src)? {
         let src_entry = src_entry?;
         let src_file_name = src_entry.file_name();
@@ -92,9 +129,11 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> anyhow::
             match op {
                 FileOperation::Skip => continue,
                 FileOperation::Link => {
+                    stack.run()?;
                     fs::hard_link(src_path, target_path).context("hard link failed")?;
                 }
                 FileOperation::Copy { perm } => {
+                    stack.run()?;
                     fs::copy(src_path, &target_path).context("copy failed")?;
                     perm.apply(&target_path).context("apply perm failed")?;
                 }
@@ -107,14 +146,17 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> anyhow::
             match op {
                 SymLinkOperation::Skip => continue,
                 SymLinkOperation::LinkTarget => {
+                    stack.run()?;
                     let src_path =
                         fs::canonicalize(&src_path).context("canonicalize src path failed")?;
                     fs::hard_link(src_path, target)?;
                 }
                 SymLinkOperation::LinkSymlink => {
+                    stack.run()?;
                     fs::hard_link(src_path, target_path).context("create hard link failed")?;
                 }
                 SymLinkOperation::CopyTarget { perm } => {
+                    stack.run()?;
                     fs::copy(src_path, &target_path).context("copy target failed")?;
                     perm.apply(&target_path).context("apply perm failed")?;
                 }
@@ -127,18 +169,18 @@ fn run_on_dir<H: PathHandler>(src: &Path, target: &Path, handle: &H) -> anyhow::
             match op {
                 DirOperation::Skip => continue,
                 DirOperation::Process { perm } => {
-                    if !target_path.exists() {
-                        fs::create_dir(&target_path).context("create dir failed")?;
-                        perm.apply(&target_path)
-                            .context("apply perm to dir failed")?;
-                    }
-                    run_on_dir(&src_path, &target_path, handle).with_context(|| {
+                    stack.frames.push(StackFrame {
+                        target_dir: target_path.clone(),
+                        perm,
+                    });
+                    run_on_dir(&src_path, &target_path, handle, stack).with_context(|| {
                         format!(
                             "recursive run on {} => {} failed",
                             src_path.display(),
                             target_path.display()
                         )
                     })?;
+                    stack.frames.pop();
                 }
             }
         }
