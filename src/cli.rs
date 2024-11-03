@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::{config, handler::Handler, searcher};
 
 #[derive(clap::Parser)]
+#[clap(version)]
 pub struct Cli {
     #[clap(short, long, help = "config toml path")]
     config: PathBuf,
