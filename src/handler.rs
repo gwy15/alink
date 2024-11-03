@@ -2,12 +2,12 @@ use crate::{config, db, searcher};
 use anyhow::Result;
 use parking_lot::Mutex;
 use recursive_link::*;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     io,
     path::{Path, PathBuf},
 };
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
 
 pub struct Handler<'s> {
     pub basic: &'s config::Basic,
